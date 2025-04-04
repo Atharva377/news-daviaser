@@ -1,0 +1,7 @@
+streamlit
+groq
+newspaper3k
+pandas
+plotly
+python-dotenv
+lxml_html_clean>=1.0.0
