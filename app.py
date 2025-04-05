@@ -216,13 +216,25 @@ def analyze_with_llama(system_prompt: str, user_input: str, max_tokens: int = 40
         return ""
 
 def detect_biases(text: str) -> Dict:
-    PROMPT = """Analyze this text for:
-    1. Loaded language (emotional/subjective words)
-    2. Omitted context (what's missing?)
-    3. Political slant (Left/Center/Right)
-    4. Suggested neutral rewrites
+    PROMPT = """Analyze this text for biases and return a detailed JSON response with:
+    1. "loaded_words": List of emotionally charged words with their impact scores (1-5)
+    2. "missing_context": List of important context that's missing
+    3. "slant_score": Political slant from 1 (far left) to 10 (far right)
+    4. "neutral_rewrites": List of original phrases with neutral alternatives
+    5. "bias_summary": Paragraph summarizing the overall bias
     
-    Return as JSON with keys: loaded_words, missing_context, slant_score (1-10), neutral_rewrites"""
+    Example:
+    {
+        "loaded_words": [{"word": "radical", "score": 4}, {"word": "extreme", "score": 3}],
+        "missing_context": ["Historical background", "Opposing viewpoints"],
+        "slant_score": 7,
+        "neutral_rewrites": [
+            {"original": "disastrous policy", "neutral": "controversial policy"},
+            {"original": "heroic protestors", "neutral": "protestors"}
+        ],
+        "bias_summary": "The article shows a moderate conservative bias through..."
+    }"""
+    
     result = analyze_with_llama(PROMPT, text)
     try:
         return json.loads(result)
@@ -235,27 +247,44 @@ def detect_biases(text: str) -> Dict:
             pass
         return {
             "loaded_words": [],
-            "missing_context": "Analysis failed",
+            "missing_context": ["Analysis failed"],
             "slant_score": 5,
-            "neutral_rewrites": []
+            "neutral_rewrites": [],
+            "bias_summary": "Could not analyze biases due to technical issues"
         }
 
 def enhance_context(text: str) -> str:
     PROMPT = """Improve this article by:
-    1. Adjusting historical amounts for inflation
-    2. Adding statistical baselines
-    3. Flagging logical fallacies
-    4. Inserting [CONTEXT] notes where needed
+    1. Adjusting historical amounts for inflation when mentioned
+    2. Adding statistical baselines for claims
+    3. Flagging logical fallacies with [FALLACY DETECTED] notes
+    4. Inserting [MISSING CONTEXT] notes where important info is absent
+    5. Adding relevant historical parallels
     
-    Preserve the original text but make it more informative."""
+    Return the enhanced version with changes marked in bold."""
     return analyze_with_llama(PROMPT, text)
 
 def generate_perspectives(text: str) -> Dict[str, str]:
     PROMPT = """Provide 3 perspectives on this news article in JSON format:
     {
-        "progressive": "Progressive viewpoint here with key arguments",
-        "conservative": "Conservative counterarguments here",
-        "expert": "Neutral expert analysis with citations when possible"
+        "progressive": {
+            "summary": "Progressive viewpoint summary",
+            "key_points": ["Point 1", "Point 2"],
+            "strengths": ["Strength 1", "Strength 2"],
+            "weaknesses": ["Weakness 1", "Weakness 2"]
+        },
+        "conservative": {
+            "summary": "Conservative viewpoint summary",
+            "key_points": ["Point 1", "Point 2"],
+            "strengths": ["Strength 1", "Strength 2"],
+            "weaknesses": ["Weakness 1", "Weakness 2"]
+        },
+        "expert": {
+            "summary": "Neutral expert analysis",
+            "key_points": ["Point 1", "Point 2"],
+            "credibility_factors": ["Source reliability", "Evidence quality"],
+            "recommendations": ["Suggested further reading", "Areas for verification"]
+        }
     }"""
     try:
         result = analyze_with_llama(PROMPT, text[:3000])
@@ -263,15 +292,15 @@ def generate_perspectives(text: str) -> Dict[str, str]:
         if json_pattern:
             return json.loads(json_pattern.group(0))
         return {
-            "progressive": "Could not generate perspective.",
-            "conservative": "Could not generate perspective.",
-            "expert": "Could not generate perspective."
+            "progressive": {"summary": "Could not generate perspective."},
+            "conservative": {"summary": "Could not generate perspective."},
+            "expert": {"summary": "Could not generate perspective."}
         }
     except Exception as e:
         return {
-            "progressive": f"Error: {str(e)}",
-            "conservative": f"Error: {str(e)}",
-            "expert": f"Error: {str(e)}"
+            "progressive": {"summary": f"Error: {str(e)}"},
+            "conservative": {"summary": f"Error: {str(e)}"},
+            "expert": {"summary": f"Error: {str(e)}"}
         }
 
 def compare_article_biases(articles: List[Dict]) -> Dict:
@@ -291,12 +320,14 @@ TITLES:
 SOURCES:
 {json.dumps(article_sources)}
 
-Analyze and return a JSON object with:
+Analyze and return a detailed JSON object with:
 1. "narrative_differences": Major differences in how they portray the story
-2. "factual_inconsistencies": Any contradictory facts presented
-3. "bias_comparison": Comparative analysis of bias by source
-4. "slant_scores": Numeric scores from 1 (far left) to 10 (far right) for each source
+2. "factual_inconsistencies": Any contradictory facts presented with severity ratings
+3. "bias_comparison": Table comparing bias by source with scores (1-10)
+4. "slant_scores": Numeric scores from 1 (far left) to 10 (far right) for each
 5. "most_objective": Index of the most objective article (0-based)
+6. "least_objective": Index of the most biased article (0-based)
+7. "recommendations": How to get a balanced understanding of this topic
 
 Return only valid JSON."""
     
@@ -315,16 +346,17 @@ Return only valid JSON."""
             "Variation in tone and emphasis between sources"
         ],
         "factual_inconsistencies": [
-            "Minor differences in reported facts",
-            "Different interpretations of the same events"
+            {"issue": "Minor differences in reported facts", "severity": 2},
+            {"issue": "Different interpretations of the same events", "severity": 3}
         ],
-        "bias_comparison": {
-            "Left-leaning": "Emphasizes social impacts",
-            "Right-leaning": "Focuses on economic aspects",
-            "Centrist": "Balanced coverage"
-        },
+        "bias_comparison": [
+            {"source": article_sources[0], "bias_score": random.randint(3, 7), "bias_type": random.choice(["Left-leaning", "Right-leaning"])},
+            {"source": article_sources[1], "bias_score": random.randint(3, 7), "bias_type": random.choice(["Left-leaning", "Right-leaning"])}
+        ],
         "slant_scores": [random.randint(3, 7) for _ in range(len(articles))],
-        "most_objective": random.randint(0, len(articles)-1)
+        "most_objective": random.randint(0, len(articles)-1),
+        "least_objective": random.randint(0, len(articles)-1),
+        "recommendations": ["Consult multiple sources", "Check primary documents when possible"]
     }
 
 # --- Article Processing ---
@@ -533,7 +565,7 @@ def main():
             st.warning("Could not find similar articles for comparison")
 
     # Create tabs for analysis
-    tab1, tab2, tab3, tab4 = st.tabs(["Bias Analysis", "Enhanced Version", "Multi-Perspective", "Article Comparison"])
+    tab1, tab2, tab3 = st.tabs(["Bias Analysis", "Enhanced Version", "Multi-Perspective"])
 
     with tab1:
         st.header("🔍 Bias Detection")
@@ -544,31 +576,74 @@ def main():
             with st.spinner("🧠 Analyzing with Llama 3.3 70B..."):
                 bias_report = detect_biases(st.session_state.original_text)
             
+            # Display bias summary prominently
+            st.subheader("📌 Bias Summary")
+            st.info(bias_report.get("bias_summary", "No bias summary available"))
+            
+            # Enhanced loaded language display
             st.subheader("⚠️ Loaded Language")
             loaded_words = bias_report.get("loaded_words", [])
             if loaded_words:
-                st.write(", ".join(f"`{w}`" for w in loaded_words))
+                # Create a DataFrame for better display
+                loaded_df = pd.DataFrame(loaded_words)
+                if 'score' in loaded_df.columns:
+                    loaded_df['impact'] = loaded_df['score'].apply(lambda x: '⭐' * int(x))
+                    st.dataframe(
+                        loaded_df[['word', 'impact']].rename(columns={'word': 'Biased Word', 'impact': 'Impact'}),
+                        use_container_width=True
+                    )
+                else:
+                    st.write(", ".join(f"`{w}`" for w in loaded_words))
             else:
                 st.success("No strongly biased language detected")
 
+            # Enhanced slant visualization
             st.subheader("📊 Political Slant")
             slant = bias_report.get("slant_score", 5)
+            
+            # Calculate values for the chart
+            left_val = max(0, 5 - slant)
+            center_val = 10 - abs(5 - slant) * 2
+            right_val = max(0, slant - 5)
+            
+            # Create a more informative chart
             fig = px.bar(
                 x=["Left", "Center", "Right"],
-                y=[max(0, 5-slant), 10-abs(5-slant)*2, max(0, slant-5)],
-                labels={"x": "", "y": "Intensity"},
-                color_discrete_sequence=["blue", "gray", "red"]
+                y=[left_val, center_val, right_val],
+                labels={"x": "Political Orientation", "y": "Intensity"},
+                color=["Left", "Center", "Right"],
+                color_discrete_sequence=["blue", "gray", "red"],
+                title=f"Political Slant Score: {slant}/10",
+                text=[f"{left_val:.1f}", f"{center_val:.1f}", f"{right_val:.1f}"]
             )
+            fig.update_layout(showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
-
+            
+            # Enhanced neutral rewrites
             st.subheader("✏️ Suggested Neutral Phrases")
-            for rewrite in bias_report.get("neutral_rewrites", []):
-                if isinstance(rewrite, dict):
-                    st.markdown(f"- **Original:** {rewrite.get('original', '')}")
-                    st.markdown(f"- **Neutral:** {rewrite.get('rewrite', '')}")
-                    st.divider()
-                elif isinstance(rewrite, str):
-                    st.write(rewrite)
+            rewrites = bias_report.get("neutral_rewrites", [])
+            if rewrites:
+                for rewrite in rewrites:
+                    if isinstance(rewrite, dict):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**Original:** {rewrite.get('original', '')}")
+                        with col2:
+                            st.markdown(f"**Neutral:** {rewrite.get('rewrite', '')}")
+                        st.divider()
+                    elif isinstance(rewrite, str):
+                        st.write(rewrite)
+            else:
+                st.info("No suggested rewrites available")
+            
+            # Missing context section
+            st.subheader("🔍 Missing Context")
+            missing_context = bias_report.get("missing_context", [])
+            if missing_context:
+                for i, context in enumerate(missing_context):
+                    st.markdown(f"{i+1}. {context}")
+            else:
+                st.success("No major missing context identified")
         else:
             st.warning("Basic NLP mode selected. Upgrade to Llama 3.3 for deeper analysis.")
 
@@ -578,13 +653,18 @@ def main():
             with st.spinner("📚 Adding missing context..."):
                 enhanced = enhance_context(st.session_state.original_text)
                 st.session_state.enhanced_text = enhanced
+            
+            # Side-by-side comparison with syntax highlighting
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader("Original")
-                st.write(st.session_state.original_text)
+                st.markdown(f'<div style="border: 1px solid #ccc; padding: 10px; border-radius: 5px; height: 600px; overflow-y: scroll;">{st.session_state.original_text}</div>', 
+                           unsafe_allow_html=True)
             with col2:
                 st.subheader("Enhanced")
-                st.write(st.session_state.enhanced_text)
+                st.markdown(f'<div style="border: 1px solid #4CAF50; padding: 10px; border-radius: 5px; height: 600px; overflow-y: scroll;">{st.session_state.enhanced_text}</div>', 
+                           unsafe_allow_html=True)
+            
             st.download_button(
                 label="📥 Download Enhanced Version",
                 data=st.session_state.enhanced_text,
@@ -592,171 +672,198 @@ def main():
             )
         else:
             st.warning("Basic mode only shows original text.")
+            st.write(st.session_state.original_text)
 
     with tab3:
         st.header("🔄 Multi-Perspective Analysis")
         if analysis_mode != "Fast (Basic NLP)":
             with st.spinner("🤝 Generating balanced perspectives..."):
                 perspectives = generate_perspectives(st.session_state.original_text)
-            st.subheader("🧭 Progressive Viewpoint")
-            st.write(perspectives.get("progressive", "N/A"))
-            st.subheader("🛡️ Conservative Viewpoint")
-            st.write(perspectives.get("conservative", "N/A"))
-            st.subheader("📚 Expert Analysis")
-            st.write(perspectives.get("expert", "N/A"))
+            
+            # Progressive Viewpoint
+            with st.expander("🧭 Progressive Viewpoint", expanded=True):
+                if isinstance(perspectives.get("progressive"), dict):
+                    st.subheader("Summary")
+                    st.write(perspectives["progressive"].get("summary", "N/A"))
+                    
+                    st.subheader("Key Points")
+                    for point in perspectives["progressive"].get("key_points", []):
+                        st.markdown(f"- {point}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Strengths")
+                        for strength in perspectives["progressive"].get("strengths", []):
+                            st.markdown(f"- ✅ {strength}")
+                    with col2:
+                        st.subheader("Weaknesses")
+                        for weakness in perspectives["progressive"].get("weaknesses", []):
+                            st.markdown(f"- ❌ {weakness}")
+                else:
+                    st.write(perspectives.get("progressive", "N/A"))
+            
+            # Conservative Viewpoint
+            with st.expander("🛡️ Conservative Viewpoint", expanded=True):
+                if isinstance(perspectives.get("conservative"), dict):
+                    st.subheader("Summary")
+                    st.write(perspectives["conservative"].get("summary", "N/A"))
+                    
+                    st.subheader("Key Points")
+                    for point in perspectives["conservative"].get("key_points", []):
+                        st.markdown(f"- {point}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Strengths")
+                        for strength in perspectives["conservative"].get("strengths", []):
+                            st.markdown(f"- ✅ {strength}")
+                    with col2:
+                        st.subheader("Weaknesses")
+                        for weakness in perspectives["conservative"].get("weaknesses", []):
+                            st.markdown(f"- ❌ {weakness}")
+                else:
+                    st.write(perspectives.get("conservative", "N/A"))
+            
+            # Expert Analysis
+            with st.expander("📚 Expert Analysis", expanded=True):
+                if isinstance(perspectives.get("expert"), dict):
+                    st.subheader("Summary")
+                    st.write(perspectives["expert"].get("summary", "N/A"))
+                    
+                    st.subheader("Key Points")
+                    for point in perspectives["expert"].get("key_points", []):
+                        st.markdown(f"- {point}")
+                    
+                    st.subheader("Credibility Factors")
+                    for factor in perspectives["expert"].get("credibility_factors", []):
+                        st.markdown(f"- 🔍 {factor}")
+                    
+                    st.subheader("Recommendations")
+                    for rec in perspectives["expert"].get("recommendations", []):
+                        st.markdown(f"- 📖 {rec}")
+                else:
+                    st.write(perspectives.get("expert", "N/A"))
         else:
             st.warning("Switch to Llama 3.3 mode for multi-perspective generation.")
     
-    with tab4:
+    # Article Comparison Section (now outside tabs for better visibility)
+    if similar_articles:
         st.header("🔍 Article Comparison")
-        if not similar_articles:
-            st.warning("No similar articles found for comparison. Try searching with a more specific title.")
-        else:
-            st.subheader("📊 Cross-Source Analysis")
-            
-            # Analyze differences between articles
-            if analysis_mode != "Fast (Basic NLP)":
-                with st.spinner("⚖️ Comparing coverage across sources..."):
-                    # Add the original article to the comparison list
-                    all_articles = [
-                        {
-                            "title": st.session_state.title,
-                            "text": st.session_state.original_text,
-                            "source": st.session_state.source if not isinstance(st.session_state.source, str) or not st.session_state.source.startswith("http") else "Primary Source"
-                        }
-                    ] + similar_articles
-                    
-                    comparison_results = compare_article_biases(all_articles)
-                
-                if "error" not in comparison_results:
-                    # Show narrative differences
-                    st.subheader("📝 Narrative Differences")
-                    for i, diff in enumerate(comparison_results.get("narrative_differences", [])):
-                        st.markdown(f"**{i+1}.** {diff}")
-                    
-                    # Show factual inconsistencies
-                    st.subheader("⚠️ Factual Inconsistencies")
-                    inconsistencies = comparison_results.get("factual_inconsistencies", [])
-                    if inconsistencies:
-                        for i, inconsistency in enumerate(inconsistencies):
-                            st.markdown(f"**{i+1}.** {inconsistency}")
-                    else:
-                        st.success("No major factual inconsistencies detected")
-                    
-                    # Political slant comparison
-                    st.subheader("🔍 Political Slant by Source")
-                    sources = [a.get("source", f"Source {i}") for i, a in enumerate(all_articles)]
-                    slant_scores = comparison_results.get("slant_scores", [5] * len(all_articles))
-
-                    # In the Bias Analysis tab (around line 652 in your original code)
-                    st.subheader("📊 Political Slant")
-                    slant = bias_report.get("slant_score", 5)
-
-# Calculate the values for left, center, right
-                    left_val = max(0, 5 - slant)
-                    center_val = 10 - abs(5 - slant) * 2
-                    right_val = max(0, slant - 5)
-
-# Ensure all values are positive
-                    left_val = max(0, left_val)
-                    center_val = max(0, center_val)
-                    right_val = max(0, right_val)
-                    
-                    # Create a bar chart comparing slants
-                    fig = px.bar(
-                    x=["Left", "Center", "Right"],
-                    y=[left_val, center_val, right_val],
-                    labels={"x": "", "y": "Intensity"},
-                    color=["Left", "Center", "Right"],
-                    color_discrete_sequence=["blue", "gray", "red"]
- )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Most objective source
-                    most_objective_idx = comparison_results.get("most_objective", 0)
-                    if 0 <= most_objective_idx < len(all_articles):
-                        st.success(f"📊 Most objective coverage: **{all_articles[most_objective_idx].get('source', 'Unknown')}**")
-            
-            # Article side-by-side comparison
-            st.subheader("📑 Article Side-by-Side")
-            
-            # Create tabs for each article
-            article_tabs = st.tabs(["Original"] + [f"Similar {i+1}" for i in range(len(similar_articles))])
-            
-            # Display the original article
-            with article_tabs[0]:
-                st.subheader(st.session_state.title)
-                st.caption(f"Source: {st.session_state.source}")
-                st.write(st.session_state.original_text)
-            
-            # Display each similar article
-            for i, article in enumerate(similar_articles):
-                with article_tabs[i+1]:
-                    st.subheader(article.get("title", f"Article {i+1}"))
-                    st.caption(f"Source: {article.get('source', 'Unknown')}")
-                    if article.get("authors"):
-                        st.caption(f"By {', '.join(article['authors'])}")
-                    if article.get("publish_date"):
-                        st.caption(f"Published: {article['publish_date'].strftime('%B %d, %Y')}")
-                    st.write(article.get("text", "No content available"))
         
-            # Bias heat map across all articles
-            if analysis_mode != "Fast (Basic NLP)" and len(similar_articles) > 0:
-                st.subheader("🔥 Bias Heat Map")
+        # Add the original article to the comparison list
+        all_articles = [
+            {
+                "title": st.session_state.title,
+                "text": st.session_state.original_text,
+                "source": st.session_state.source if not isinstance(st.session_state.source, str) or not st.session_state.source.startswith("http") else "Primary Source",
+                "authors": st.session_state.authors,
+                "publish_date": st.session_state.publish_date
+            }
+        ] + similar_articles
+        
+        if analysis_mode != "Fast (Basic NLP)":
+            with st.spinner("⚖️ Comparing coverage across sources..."):
+                comparison_results = compare_article_biases(all_articles)
+            
+            if "error" not in comparison_results:
+                # Narrative differences
+                st.subheader("📝 Narrative Differences")
+                for i, diff in enumerate(comparison_results.get("narrative_differences", [])):
+                    st.markdown(f"**{i+1}.** {diff}")
                 
-                # Get bias scores for all articles
-                all_articles = [
-                    {
-                        "title": st.session_state.title,
-                        "text": st.session_state.original_text,
-                        "source": st.session_state.source if not isinstance(st.session_state.source, str) or not st.session_state.source.startswith("http") else "Primary Source"
-                    }
-                ] + similar_articles
+                # Factual inconsistencies with improved severity handling
+                st.subheader("⚠️ Factual Inconsistencies")
+                inconsistencies = comparison_results.get("factual_inconsistencies", [])
+                if inconsistencies:
+                    for i, inconsistency in enumerate(inconsistencies):
+                        if isinstance(inconsistency, dict):
+                            severity_str = str(inconsistency.get("severity", "1"))
+                            
+                            # Convert text severity to numeric value
+                            severity_map = {
+                                "low": 1,
+                                "medium": 3,
+                                "high": 5,
+                                "minor": 1,
+                                "moderate": 3,
+                                "major": 5
+                            }
+                            
+                            try:
+                                severity = int(severity_str)
+                            except ValueError:
+                                # If not a number, try to map from text
+                                severity = severity_map.get(severity_str.lower(), 1)
+                            
+                            st.markdown(f"""
+                            **{i+1}.** {inconsistency.get("issue", "Unknown")}
+                            Severity: {"🔴" * severity + "⚪" * (5 - severity)} ({severity}/5)
+                            """)
+                        else:
+                            st.markdown(f"**{i+1}.** {inconsistency}")
+                else:
+                    st.success("No major factual inconsistencies detected")
                 
-                # Get bias categories and scores
-                bias_categories = ["Loaded Language", "Missing Context", "Political Slant"]
-                sources = [a.get("source", f"Source {i}") if not isinstance(a.get("source"), str) or not a.get("source", "").startswith("http") else f"Source {i}" for i, a in enumerate(all_articles)]
+                # Political slant comparison
+                st.subheader("🔍 Political Slant by Source")
+                if isinstance(comparison_results.get("bias_comparison"), list):
+                    bias_df = pd.DataFrame(comparison_results["bias_comparison"])
+                    st.dataframe(
+                        bias_df.style.background_gradient(cmap='RdBu', subset=['bias_score']),
+                        use_container_width=True
+                    )
+                else:
+                    st.write(comparison_results.get("bias_comparison", "N/A"))
                 
-                # Create dataframe for heatmap
-                bias_data = []
-                for i, article in enumerate(all_articles):
-                    with st.spinner(f"Analyzing bias in article {i+1}..."):
-                        bias_report = detect_biases(article.get("text", ""))
-                        loaded_words_score = min(10, len(bias_report.get("loaded_words", [])))
-                        missing_context_score = len(bias_report.get("missing_context", "")) / 20  # Normalize to 0-10
-                        slant_deviation = abs(bias_report.get("slant_score", 5) - 5) * 2  # Convert to 0-10 scale
-                        
-                        bias_data.append({
-                            "Source": sources[i],
-                            "Loaded Language": loaded_words_score,
-                            "Missing Context": missing_context_score,
-                            "Political Slant": slant_deviation
-                        })
+                # Most/least objective
+                col1, col2 = st.columns(2)
+                with col1:
+                    most_obj_idx = comparison_results.get("most_objective", 0)
+                    if 0 <= most_obj_idx < len(all_articles):
+                        st.success(f"📊 Most objective coverage: **{all_articles[most_obj_idx].get('source', 'Unknown')}**")
+                with col2:
+                    least_obj_idx = comparison_results.get("least_objective", 0)
+                    if 0 <= least_obj_idx < len(all_articles):
+                        st.error(f"⚠️ Least objective coverage: **{all_articles[least_obj_idx].get('source', 'Unknown')}**")
                 
-                # Create a DataFrame for the heatmap
-                bias_df = pd.DataFrame(bias_data)
-                bias_df_melted = pd.melt(
-                    bias_df, 
-                    id_vars=["Source"], 
-                    value_vars=bias_categories,
-                    var_name="Bias Category", 
-                    value_name="Score"
-                )
+                # Recommendations
+                st.subheader("📌 Recommendations for Balanced Understanding")
+                for rec in comparison_results.get("recommendations", []):
+                    st.markdown(f"- {rec}")
+        
+        # Side-by-side article comparison (horizontal layout)
+        st.subheader("📑 Article Comparison View")
+        
+        # Create columns for each article
+        cols = st.columns(len(all_articles))
+        
+        for i, (col, article) in enumerate(zip(cols, all_articles)):
+            with col:
+                # Header with source info
+                st.markdown(f"""
+                <div style="background-color:#f0f2f6;padding:10px;border-radius:5px;margin-bottom:10px;">
+                    <h4 style="margin:0;">{article.get('title', 'Untitled')}</h4>
+                    <p style="margin:0;font-size:0.8em;">
+                        <b>Source:</b> {article.get('source', 'Unknown')}<br>
+                        {f"<b>Authors:</b> {', '.join(article['authors'])}<br>" if article.get('authors') else ""}
+                        {f"<b>Date:</b> {article['publish_date'].strftime('%Y-%m-%d')}" if article.get('publish_date') else ""}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Create the heatmap
-                fig = px.imshow(
-                    bias_df.set_index("Source")[bias_categories].values,
-                    x=bias_categories,
-                    y=bias_df["Source"],
-                    color_continuous_scale="Reds",
-                    labels={"color": "Bias Score"},
-                    title="Bias Comparison Across Sources"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                # Article text with scroll
+                st.markdown(f"""
+                <div style="border:1px solid #ddd;border-radius:5px;padding:10px;height:400px;overflow-y:scroll;">
+                    {article.get('text', 'No content available')}
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Show summary table
-                st.subheader("📊 Bias Summary Table")
-                st.dataframe(bias_df, use_container_width=True)
+                # Show bias analysis for this article if available
+                if analysis_mode != "Fast (Basic NLP)":
+                    with st.expander(f"Bias Analysis", expanded=False):
+                        bias_report = detect_biases(article.get('text', ''))
+                        st.write(f"**Slant Score:** {bias_report.get('slant_score', 5)}/10")
+                        st.write(f"**Summary:** {bias_report.get('bias_summary', 'No analysis available')}")
 
 if __name__ == "__main__":
     main()
